@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#1E1926">
+<title>Zeynep & Mehmet 💞</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💞</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Nunito:wght@600;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
+<style>
+:root{
+  --bg:#EEE9F3; --paper:#FFFDFB; --ink:#2C2238; --soft:#7A6E88; --line:#DCD3E6;
+  --rose:#E2546B; --chip:#FFFFFF; --shadow:0 6px 24px rgba(60,30,80,.12);
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#1E1926; --paper:#2A2333; --ink:#F3ECF7; --soft:#A99BB8; --line:#3D3449;
+    --rose:#FF7088; --chip:#352C40; --shadow:0 6px 24px rgba(0,0,0,.35);
+    color-scheme:dark;
+  }
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;background:var(--bg)}
+body{color:var(--ink);font-family:"Nunito",system-ui,-apple-system,"Segoe UI",sans-serif;
+  -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none}
+
+/* The app is always laid out in landscape. If the phone is held upright,
+   the whole app is turned 90° so it fills the screen sideways. */
+#app{position:fixed;top:0;left:0;width:var(--aw,100vw);height:var(--ah,100vh);display:flex;gap:10px;
+  padding:max(10px,env(safe-area-inset-top)) max(10px,env(safe-area-inset-right)) max(10px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left))}
+body.rot #app{left:var(--vw);transform-origin:0 0;transform:rotate(90deg);
+  padding:max(10px,env(safe-area-inset-left)) max(10px,env(safe-area-inset-top)) max(10px,env(safe-area-inset-right)) max(10px,env(safe-area-inset-bottom))}
+
+main{flex:1;min-width:0;display:flex;align-items:center;justify-content:center}
+.sheet{position:relative;background:var(--paper);border-radius:20px;box-shadow:var(--shadow);overflow:hidden;touch-action:none}
+canvas{display:block;width:100%;height:100%;touch-action:none}
+
+.status{position:absolute;top:10px;left:10px;display:flex;align-items:center;gap:7px;font-size:.8rem;font-weight:800;color:var(--soft);
+  background:var(--chip);border:1px solid var(--line);padding:5px 11px;border-radius:999px;white-space:nowrap;pointer-events:none;z-index:2}
+.status .dot{width:8px;height:8px;border-radius:50%;background:var(--line)}
+.status.together{color:var(--rose)}
+.status.together .dot{background:var(--rose);animation:beat 1.4s ease-in-out infinite}
+@keyframes beat{0%,100%{transform:scale(1)}15%{transform:scale(1.45)}30%{transform:scale(1)}45%{transform:scale(1.3)}}
+
+.pen{position:absolute;width:26px;height:26px;margin:-22px 0 0 -13px;pointer-events:none;opacity:0;transition:opacity .25s;
+  filter:drop-shadow(0 2px 4px rgba(0,0,0,.25))}
+.pen svg{width:100%;height:100%;fill:currentColor;stroke:#fff;stroke-width:1.5}
+.pen.on{opacity:.95}
+.heart{position:absolute;bottom:-30px;pointer-events:none;color:var(--rose);line-height:1;z-index:4;animation:rise var(--d,2.6s) ease-out forwards}
+@keyframes rise{0%{transform:translate(0,0) scale(.6);opacity:0}12%{opacity:1}100%{transform:translate(var(--x,0),calc(-1 * var(--h,500px))) scale(1.15) rotate(var(--r,0deg));opacity:0}}
+@media (prefers-reduced-motion: reduce){.heart{animation-duration:.01s}.status.together .dot,.float{animation:none !important}}
+.empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  text-align:center;color:var(--soft);pointer-events:none;padding:24px;transition:opacity .4s}
+.empty b{font-family:"Caveat",cursive;font-size:2.3rem;color:var(--ink);font-weight:600}
+.empty span{font-size:.9rem;max-width:30ch;line-height:1.45}
+
+aside{flex:none;width:92px;display:flex;flex-direction:column;justify-content:center;gap:10px;
+  background:var(--chip);border:1px solid var(--line);border-radius:20px;padding:10px;box-shadow:var(--shadow);overflow-y:auto}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;justify-items:center}
+.sw{width:30px;height:30px;border-radius:50%;border:none;cursor:pointer;padding:0;position:relative;box-shadow:inset 0 0 0 1px rgba(0,0,0,.15)}
+.sw[aria-pressed="true"]::after{content:"";position:absolute;inset:-5px;border-radius:50%;border:2.5px solid var(--ink)}
+.rule{height:1px;background:var(--line)}
+.btn{width:34px;height:34px;border-radius:11px;border:1px solid var(--line);background:transparent;color:var(--ink);
+  display:grid;place-items:center;cursor:pointer;padding:0}
+.btn svg{width:18px;height:18px}
+.btn:active{background:var(--line)}
+.size i{display:block;border-radius:50%;background:var(--ink)}
+button:focus-visible{outline:2.5px solid var(--rose);outline-offset:2px}
+
+.toast{position:absolute;left:50%;bottom:22px;transform:translateX(-50%) translateY(16px);background:var(--ink);color:var(--paper);
+  font-weight:800;font-size:.9rem;padding:9px 15px;border-radius:14px;opacity:0;transition:opacity .3s,transform .3s;pointer-events:none;white-space:nowrap;z-index:3}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+#start{position:absolute;inset:0;z-index:10;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:20px;overflow:hidden;transition:opacity .6s}
+#start.bye{opacity:0;pointer-events:none}
+#start .hi{font-family:"Caveat",cursive;font-size:1.6rem;color:var(--rose);margin:0}
+#start h1{font-family:"Caveat",cursive;font-weight:700;font-size:clamp(2.2rem,7vmin,3.4rem);line-height:1;margin:0;max-width:20ch}
+#start p{margin:0;color:var(--soft);max-width:38ch;line-height:1.5}
+#start .sign{font-family:"Caveat",cursive;font-size:1.6rem;color:var(--ink);opacity:.8}
+#go{font:inherit;font-weight:800;font-size:1.1rem;border:none;border-radius:999px;padding:14px 32px;background:var(--rose);color:#fff;cursor:pointer;box-shadow:var(--shadow);margin-top:6px;position:relative;z-index:1}
+.float{position:absolute;bottom:-40px;color:var(--rose);opacity:.18;animation:drift linear infinite;pointer-events:none}
+@keyframes drift{from{transform:translateY(0) rotate(-10deg)}to{transform:translateY(calc(-1 * var(--ah,100vh) - 80px)) rotate(14deg)}}
+#start > *:not(.float){position:relative;z-index:1}
+</style>
+</head>
+<body>
+<div id="app">
+  <main id="main">
+    <div class="sheet" id="sheet">
+      <canvas id="cv"></canvas>
+      <div class="status" id="status"><span class="dot"></span><span id="statusText">Sana bağlanıyorum…</span></div>
+      <div class="empty" id="empty"><b>Seninle birşeyler çizmek istedim</b><span>Bu aralar canın sıkkın biliyorum bebeğim, herşey az da olsa gülümsemen için</span></div>
+      <div class="toast" id="toast"></div>
+    </div>
+  </main>
+  <aside>
+    <div class="grid" id="swatches" role="group" aria-label="Renk"></div>
+    <div class="rule"></div>
+    <div class="grid">
+      <button class="btn size" id="sizeBtn" aria-label="Kalınlık"><i id="sizeDot"></i></button>
+      <button class="btn" id="undoBtn" aria-label="Son çizgimi geri al"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
+      <button class="btn" id="clearBtn" aria-label="Sayfayı temizle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
+      <button class="btn" id="loveBtn" aria-label="Kalp gönder" style="color:var(--rose)"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 21s-7.5-4.6-9.5-9.2C1 8.4 3.2 5 6.6 5c2 0 3.7 1.1 4.4 2.7h2C13.7 6.1 15.4 5 17.4 5 20.8 5 23 8.4 21.5 11.8 19.5 16.4 12 21 12 21z"/></svg></button>
+      <button class="btn" id="fsBtn" aria-label="Tam ekran"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5"/><path d="M20 9V4h-5"/><path d="M4 15v5h5"/><path d="M20 15v5h-5"/></svg></button>
+    </div>
+  </aside>
+  <div id="start">
+    <p class="hi" id="hi">Bizim için sevgili bucimmmm</p>
+    <h1>Uzaktayız ama uzak olmak zorunda değiliz Sevgilim</h1>
+    <p>Hadi birtanem gel birşeyler çizelim, çocukça davranmak için çocuk olmaya gerek yok</p>
+    <button id="go">Başlayalım aşkım 💌</button>
+    <div class="sign" id="sign"></div>
+  </div>
+</div>
+
+<script>
+(() => {
+  // ====== Kişisel dokunuşlar (istersen doldur) ======
+  const ONUN_ADI = "Zeynep";
+  const IMZA = "Mehmet"; 
+
+  // ====== Ayarlar ======
+  // Aynı odadaki herkes birbirini görür. Linke ?oda=baskaisim ekleyerek farklı oda açılabilir.
+  const ROOM = new URLSearchParams(location.search).get("oda") || "ask-8205c547abb0";
+  const BROKER = "wss://broker.hivemq.com:8884/mqtt";
+  const TOPIC = "birliktecizim/v1/" + ROOM.replace(/[^a-zA-Z0-9_-]/g, "");
+
+  // Mantıksal yatay sayfa: her telefonda aynı, çizimler birebir aynı yere düşer.
+  const W = 1400, H = 1000;
+  const COLORS = ["#2C2238","#E2546B","#F08A5D","#E8B23B","#4C9A6A","#3E7CB1","#8A5CC7","#FFFFFF"];
+  const SIZES = [5, 10, 20];
+  const ME = Math.random().toString(36).slice(2, 10);
+
+  const $ = id => document.getElementById(id);
+  const sheet = $("sheet"), cv = $("cv"), ctx = cv.getContext("2d"), main = $("main");
+  const emptyEl = $("empty"), statusEl = $("status"), statusText = $("statusText"), toastEl = $("toast");
+
+  let color = COLORS[1], sizeIdx = 1, scale = 1, rotated = false;
+  const strokes = new Map(), order = [], mine = [];
+  let client = null, online = false;
+
+  // ====== Araç çubuğu ======
+  const sw = $("swatches");
+  COLORS.forEach(c => {
+    const b = document.createElement("button");
+    b.className = "sw"; b.style.background = c; b.setAttribute("aria-label", "Renk");
+    b.setAttribute("aria-pressed", c === color);
+    b.onclick = () => { color = c; [...sw.children].forEach(x => x.setAttribute("aria-pressed", x === b)); };
+    sw.appendChild(b);
+  });
+  const sizeDot = $("sizeDot");
+  const syncSizeDot = () => { const d = [6,11,18][sizeIdx]; sizeDot.style.width = sizeDot.style.height = d + "px"; };
+  syncSizeDot();
+  $("sizeBtn").onclick = () => { sizeIdx = (sizeIdx + 1) % SIZES.length; syncSizeDot(); };
+
+  function hearts(n){
+    const H_ = sheet.clientHeight;
+    for (let i = 0; i < n; i++){
+      const h = document.createElement("span");
+      h.className = "heart"; h.textContent = "♥";
+      h.style.left = (8 + Math.random() * 84) + "%";
+      h.style.fontSize = (18 + Math.random() * 26) + "px";
+      h.style.setProperty("--x", (Math.random() * 80 - 40) + "px");
+      h.style.setProperty("--h", (H_ * (0.6 + Math.random() * 0.45)) + "px");
+      h.style.setProperty("--r", (Math.random() * 40 - 20) + "deg");
+      h.style.setProperty("--d", (2.2 + Math.random() * 1.6) + "s");
+      h.style.animationDelay = (Math.random() * 0.6) + "s";
+      h.addEventListener("animationend", () => h.remove());
+      sheet.appendChild(h);
+    }
+  }
+  function toast(msg){
+    toastEl.textContent = msg; toastEl.classList.add("show");
+    clearTimeout(toast.t); toast.t = setTimeout(() => toastEl.classList.remove("show"), 2400);
+  }
+
+  // ====== Yatay ekran ======
+  async function goLandscape(){
+    try {
+      const el = document.documentElement;
+      if (!document.fullscreenElement && el.requestFullscreen) await el.requestFullscreen({navigationUI: "hide"});
+      if (screen.orientation && screen.orientation.lock) await screen.orientation.lock("landscape");
+    } catch (e) { /* iPhone vb. desteklemiyor: döndürme CSS ile yapılıyor */ }
+    setTimeout(layout, 300);
+  }
+  $("sign").textContent = "Seni çok seviyorum Zeynebimmmm ♥";
+  (() => {
+    const st = $("start");
+    for (let i = 0; i < 12; i++){
+      const h = document.createElement("span");
+      h.className = "float"; h.textContent = "♥";
+      h.style.left = (Math.random() * 96) + "%";
+      h.style.fontSize = (16 + Math.random() * 34) + "px";
+      h.style.animationDuration = (9 + Math.random() * 9) + "s";
+      h.style.animationDelay = (-Math.random() * 14) + "s";
+      st.appendChild(h);
+    }
+  })();
+  $("go").onclick = () => {
+    const st = $("start"); st.classList.add("bye"); setTimeout(() => st.remove(), 650);
+    goLandscape();
+    setTimeout(() => hearts(10), 500);
+  };
+  $("fsBtn").onclick = goLandscape;
+
+  function layout(){
+    const vw = window.innerWidth, vh = window.innerHeight;
+    rotated = vh > vw;
+    document.body.classList.toggle("rot", rotated);
+    const root = document.documentElement.style;
+    root.setProperty("--vw", vw + "px");
+    root.setProperty("--aw", (rotated ? vh : vw) + "px");
+    root.setProperty("--ah", (rotated ? vw : vh) + "px");
+
+    const availW = main.clientWidth, availH = main.clientHeight;
+    let w = availW, h = w * H / W;
+    if (h > availH){ h = availH; w = h * W / H; }
+    sheet.style.width = w + "px"; sheet.style.height = h + "px";
+    const dpr = Math.min(window.devicePixelRatio || 1, 3);
+    cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+    scale = cv.width / W;
+    redraw();
+  }
+  window.addEventListener("resize", () => requestAnimationFrame(layout));
+  window.addEventListener("orientationchange", () => setTimeout(layout, 250));
+
+  // ====== Çizim ======
+  function strokeSeg(s, from){
+    const p = s.p; if (p.length < 2) return;
+    ctx.save(); ctx.setTransform(scale,0,0,scale,0,0);
+    ctx.lineCap = "round"; ctx.lineJoin = "round";
+    ctx.strokeStyle = s.c; ctx.fillStyle = s.c; ctx.lineWidth = s.w;
+    if (p.length === 2){ ctx.beginPath(); ctx.arc(p[0], p[1], s.w/2, 0, Math.PI*2); ctx.fill(); }
+    else {
+      const st = Math.max(0, from - 2);
+      ctx.beginPath(); ctx.moveTo(p[st], p[st+1]);
+      for (let i = st + 2; i < p.length; i += 2) ctx.lineTo(p[i], p[i+1]);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+  function redraw(){
+    ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,cv.width,cv.height);
+    for (const id of order){ const s = strokes.get(id); if (s) strokeSeg(s, 0); }
+    emptyEl.style.opacity = order.length ? "0" : "1";
+  }
+  let rq = false;
+  const queueRedraw = () => { if (rq) return; rq = true; requestAnimationFrame(() => { rq = false; redraw(); }); };
+
+  function applyPts(id, c, w, o, pts, inc){
+    let s = strokes.get(id);
+    if (!s){ s = {c, w, p: []}; strokes.set(id, s); order.push(id); }
+    for (let i = 0; i < pts.length; i++) s.p[o + i] = pts[i];
+    emptyEl.style.opacity = "0";
+    inc ? strokeSeg(s, o) : queueRedraw();
+  }
+  function removeStroke(id){
+    if (!strokes.delete(id)) return;
+    const i = order.indexOf(id); if (i >= 0) order.splice(i, 1);
+    const j = mine.indexOf(id); if (j >= 0) mine.splice(j, 1);
+    queueRedraw();
+  }
+  function clearAll(){ strokes.clear(); order.length = 0; mine.length = 0; queueRedraw(); }
+
+  // ====== Bağlantı ======
+  function send(obj){
+    if (!client || !online) return;
+    obj.f = ME;
+    client.publish(TOPIC, JSON.stringify(obj), {qos: 0});
+  }
+
+  // ====== Dokunma ======
+  let cur = null, pending = [], pendingFrom = 0, flushTimer = null, lastPen = 0;
+  function toLogical(e){
+    const r = cv.getBoundingClientRect();
+    let fx, fy;
+    if (rotated){ fx = (e.clientY - r.top) / r.height; fy = (r.right - e.clientX) / r.width; }
+    else { fx = (e.clientX - r.left) / r.width; fy = (e.clientY - r.top) / r.height; }
+    return [Math.round(fx * W), Math.round(fy * H)];
+  }
+  const newId = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+
+  function flush(){
+    flushTimer = null;
+    if (!cur || !pending.length){ pending = []; return; }
+    send({t: "seg", id: cur.id, c: cur.c, w: cur.w, o: pendingFrom, p: pending});
+    pending = [];
+  }
+  function queuePts(o, pts){
+    if (!pending.length) pendingFrom = o;
+    pending.push(...pts);
+    if (pending.length > 300) flush();
+    else if (!flushTimer) flushTimer = setTimeout(flush, 40);
+  }
+  function pen(x, y, d){
+    const now = Date.now();
+    if (d && now - lastPen < 50) return;
+    lastPen = now;
+    send({t: "pen", x, y, d, c: cur ? cur.c : color});
+  }
+
+  cv.addEventListener("pointerdown", e => {
+    e.preventDefault();
+    cv.setPointerCapture(e.pointerId);
+    const pt = toLogical(e);
+    cur = {id: newId(), c: color, w: SIZES[sizeIdx]};
+    mine.push(cur.id);
+    applyPts(cur.id, cur.c, cur.w, 0, pt, true);
+    queuePts(0, pt);
+    pen(pt[0], pt[1], true);
+  });
+  cv.addEventListener("pointermove", e => {
+    if (!cur) return;
+    const s = strokes.get(cur.id); if (!s) return;
+    const evs = (e.getCoalescedEvents && e.getCoalescedEvents().length) ? e.getCoalescedEvents() : [e];
+    for (const ev of evs){
+      const pt = toLogical(ev), n = s.p.length;
+      if (Math.abs(s.p[n-2] - pt[0]) + Math.abs(s.p[n-1] - pt[1]) < 3) continue;
+      applyPts(cur.id, cur.c, cur.w, n, pt, true);
+      queuePts(n, pt);
+    }
+    const n = s.p.length;
+    pen(s.p[n-2], s.p[n-1], true);
+  });
+  function endStroke(){
+    if (!cur) return;
+    if (flushTimer) clearTimeout(flushTimer);
+    flush(); cur = null;
+    send({t: "pen", d: false});
+  }
+  cv.addEventListener("pointerup", endStroke);
+  cv.addEventListener("pointercancel", endStroke);
+
+  $("undoBtn").onclick = () => {
+    const id = mine[mine.length - 1];
+    if (!id){ toast("Henüz bir çizgin yok, hadi çiz ✨"); return; }
+    removeStroke(id); send({t: "undo", id});
+  };
+  $("clearBtn").onclick = () => {
+    if (!order.length) return;
+    if (!confirm("Bu sayfayı silip ikimize yeni bir sayfa açalım mı?")) return;
+    clearAll(); send({t: "clear"}); toast("Yeni bir sayfa, yeni bir hikâye 🤍");
+  };
+  let lastLove = 0;
+  $("loveBtn").onclick = () => {
+    const now = Date.now(); if (now - lastLove < 900) return; lastLove = now;
+    hearts(8); send({t: "love"});
+    toast(othersCount() ? "Kalbin yola çıktı 💌" : "Henüz burada değil, gelince tekrar gönder 💗");
+  };
+
+  // ====== Karşı taraf ======
+  const peers = new Map(); // id -> {seen, el}
+  function peerSeen(id){
+    let p = peers.get(id);
+    const wasEmpty = othersCount() === 0;
+    if (!p){
+      const el = document.createElement("div"); el.className = "pen";
+      el.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 21s-7.5-4.6-9.5-9.2C1 8.4 3.2 5 6.6 5c2 0 3.7 1.1 4.4 2.7h2C13.7 6.1 15.4 5 17.4 5 20.8 5 23 8.4 21.5 11.8 19.5 16.4 12 21 12 21z"/></svg>';
+      sheet.appendChild(el);
+      p = {el}; peers.set(id, p);
+      if (wasEmpty){ toast("Geldin 💗 Artık aynı kâğıttayız"); hearts(14); }
+    }
+    p.seen = Date.now();
+    setStatus();
+    return p;
+  }
+  function peerGone(id){ const p = peers.get(id); if (p){ p.el.remove(); peers.delete(id); setStatus(); } }
+  const othersCount = () => peers.size;
+  function setStatus(){
+    const together = online && othersCount() > 0;
+    statusEl.classList.toggle("together", together);
+    statusText.textContent = !online ? "Sana bağlanıyorum…" : together ? "İkimiz de buradayız" : "Seni bekliyorum…";
+  }
+  setInterval(() => {
+    send({t: "here"});
+    const now = Date.now();
+    for (const [id, p] of peers) if (now - p.seen > 13000) peerGone(id);
+  }, 4000);
+
+  const validPts = p => Array.isArray(p) && p.length <= 20000 && p.every(Number.isFinite);
+  const safeColor = c => typeof c === "string" && /^#[0-9a-f]{6}$/i.test(c) ? c : "#2C2238";
+  const safeW = w => SIZES.includes(w) ? w : 10;
+  const validSeg = d => typeof d.id === "string" && Number.isInteger(d.o) && d.o >= 0 && d.o % 2 === 0 && validPts(d.p);
+
+  function sendSync(){
+    for (const id of order){
+      const s = strokes.get(id);
+      if (s) send({t: "sync", id, c: s.c, w: s.w, o: 0, p: s.p});
+    }
+  }
+
+  function onMsg(raw){
+    let d; try { d = JSON.parse(raw); } catch { return; }
+    if (!d || typeof d.f !== "string" || d.f === ME) return;
+    const p = peerSeen(d.f);
+    switch (d.t){
+      case "seg":  if (validSeg(d)) applyPts(d.id.slice(0,40), safeColor(d.c), safeW(d.w), d.o, d.p, true); break;
+      case "sync": if (validSeg(d)) applyPts(d.id.slice(0,40), safeColor(d.c), safeW(d.w), d.o, d.p, false); break;
+      case "undo": if (typeof d.id === "string") removeStroke(d.id); break;
+      case "clear": clearAll(); toast("Yeni bir sayfa, yeni bir hikâye 🤍"); break;
+      case "love": hearts(14); toast("Sana bir kalp gönderdi 💗"); break;
+      case "bye": peerGone(d.f); break;
+      case "hello": {
+        send({t: "here"});
+        if (!order.length) break;
+        // Sayfayı yeni gelene sadece bir kişi göndersin: en küçük kimlikli olan
+        const ids = [ME, ...[...peers.keys()].filter(k => k !== d.f)].sort();
+        if (ids[0] === ME) sendSync();
+        break;
+      }
+      case "pen": {
+        if (d.d && Number.isFinite(d.x) && Number.isFinite(d.y)){
+          p.el.style.left = (d.x / W * 100) + "%";
+          p.el.style.top = (d.y / H * 100) + "%";
+          p.el.style.color = safeColor(d.c);
+          p.el.classList.add("on");
+        } else p.el.classList.remove("on");
+        break;
+      }
+    }
+  }
+
+  function connect(){
+    if (!window.mqtt){ statusText.textContent = "İnternetini kontrol et"; return; }
+    client = mqtt.connect(BROKER, {
+      clientId: "bc_" + ME, clean: true, reconnectPeriod: 2000, connectTimeout: 10000, keepalive: 30,
+      will: {topic: TOPIC, payload: JSON.stringify({t: "bye", f: ME}), qos: 0, retain: false}
+    });
+    client.on("connect", () => {
+      client.subscribe(TOPIC, {qos: 0}, () => {
+        online = true; setStatus();
+        send({t: "hello"});
+      });
+    });
+    client.on("message", (_t, msg) => onMsg(msg.toString()));
+    client.on("close", () => { online = false; setStatus(); });
+    client.on("offline", () => { online = false; setStatus(); });
+    window.addEventListener("pagehide", () => { send({t: "bye"}); });
+  }
+
+  layout();
+  connect();
+})();
+</script>
+</body>
+</html>

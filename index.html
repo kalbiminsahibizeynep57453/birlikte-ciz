@@ -11,82 +11,130 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Nunito:wght@600;800&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
 <style>
 :root{
-  --bg:#EEE9F3; --paper:#FFFDFB; --ink:#2C2238; --soft:#7A6E88; --line:#DCD3E6;
-  --rose:#E2546B; --chip:#FFFFFF; --shadow:0 6px 24px rgba(60,30,80,.12);
+  --bg:#EEE9F3; --frame:#E6DFEC; --ink:#2C2238; --soft:#7A6E88; --line:#DCD3E6;
+  --rose:#E2546B; --chip:#FFFFFF; --chip2:#F6F2F9; --shadow:0 8px 28px rgba(60,30,80,.18);
+  --paper:#FFFDFB;
   color-scheme:light;
 }
 @media (prefers-color-scheme: dark){
   :root{
-    --bg:#1E1926; --paper:#2A2333; --ink:#F3ECF7; --soft:#A99BB8; --line:#3D3449;
-    --rose:#FF7088; --chip:#352C40; --shadow:0 6px 24px rgba(0,0,0,.35);
+    --bg:#1E1926; --frame:#16121C; --ink:#F3ECF7; --soft:#A99BB8; --line:#3D3449;
+    --rose:#FF7088; --chip:#2A2333; --chip2:#352C40; --shadow:0 8px 28px rgba(0,0,0,.45);
     color-scheme:dark;
   }
 }
 *,*::before,*::after{box-sizing:border-box}
-html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;background:var(--bg)}
+html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;background:var(--paper)}
 body{color:var(--ink);font-family:"Nunito",system-ui,-apple-system,"Segoe UI",sans-serif;
   -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none}
 
-/* The app is always laid out in landscape. If the phone is held upright,
-   the whole app is turned 90° so it fills the screen sideways. */
-#app{position:fixed;top:0;left:0;width:var(--aw,100vw);height:var(--ah,100vh);display:flex;gap:10px;
-  padding:max(10px,env(safe-area-inset-top)) max(10px,env(safe-area-inset-right)) max(10px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left))}
-body.rot #app{left:var(--vw);transform-origin:0 0;transform:rotate(90deg);
-  padding:max(10px,env(safe-area-inset-left)) max(10px,env(safe-area-inset-top)) max(10px,env(safe-area-inset-right)) max(10px,env(safe-area-inset-bottom))}
+/* Uygulama her zaman yatay. Telefon dik tutulursa tamamı 90° çevrilir. */
+#app{position:fixed;top:0;left:0;width:var(--aw,100vw);height:var(--ah,100vh);overflow:hidden;background:var(--paper)}
+body.rot #app{left:var(--vw);transform-origin:0 0;transform:rotate(90deg)}
 
-main{flex:1;min-width:0;display:flex;align-items:center;justify-content:center}
-.sheet{position:relative;background:var(--paper);border-radius:20px;box-shadow:var(--shadow);overflow:hidden;touch-action:none}
-canvas{display:block;width:100%;height:100%;touch-action:none}
+main{position:absolute;inset:0}
+.sheet{position:relative;width:100%;height:100%;background:var(--paper);touch-action:none}
+.sheet canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+#pv{pointer-events:none}
 
-.status{position:absolute;top:10px;left:10px;display:flex;align-items:center;gap:7px;font-size:.8rem;font-weight:800;color:var(--soft);
-  background:var(--chip);border:1px solid var(--line);padding:5px 11px;border-radius:999px;white-space:nowrap;pointer-events:none;z-index:2}
-.status .dot{width:8px;height:8px;border-radius:50%;background:var(--line)}
-.status.together{color:var(--rose)}
-.status.together .dot{background:var(--rose);animation:beat 1.4s ease-in-out infinite}
+.status{position:absolute;top:10px;left:10px;display:flex;align-items:center;gap:7px;font-size:.78rem;font-weight:800;color:#7A6E88;
+  background:rgba(255,255,255,.85);border:1px solid #E6DEEE;padding:5px 11px;border-radius:999px;white-space:nowrap;pointer-events:none;z-index:2;
+  -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.status .dot{width:8px;height:8px;border-radius:50%;background:#D6CCE0}
+.status.together{color:#E2546B}
+.status.together .dot{background:#E2546B;animation:beat 1.4s ease-in-out infinite}
 @keyframes beat{0%,100%{transform:scale(1)}15%{transform:scale(1.45)}30%{transform:scale(1)}45%{transform:scale(1.3)}}
 
-.pen{position:absolute;width:26px;height:26px;margin:-22px 0 0 -13px;pointer-events:none;opacity:0;transition:opacity .25s;
+.pen{position:absolute;width:26px;height:26px;margin:-22px 0 0 -13px;pointer-events:none;opacity:0;transition:opacity .25s;z-index:2;
   filter:drop-shadow(0 2px 4px rgba(0,0,0,.25))}
 .pen svg{width:100%;height:100%;fill:currentColor;stroke:#fff;stroke-width:1.5}
 .pen.on{opacity:.95}
-.heart{position:absolute;bottom:-30px;pointer-events:none;color:var(--rose);line-height:1;z-index:4;animation:rise var(--d,2.6s) ease-out forwards}
-@keyframes rise{0%{transform:translate(0,0) scale(.6);opacity:0}12%{opacity:1}100%{transform:translate(var(--x,0),calc(-1 * var(--h,500px))) scale(1.15) rotate(var(--r,0deg));opacity:0}}
-@media (prefers-reduced-motion: reduce){.heart{animation-duration:.01s}.status.together .dot,.float{animation:none !important}}
-.empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
-  text-align:center;color:var(--soft);pointer-events:none;padding:24px;transition:opacity .4s}
-.empty b{font-family:"Caveat",cursive;font-size:2.3rem;color:var(--ink);font-weight:600}
-.empty span{font-size:.9rem;max-width:30ch;line-height:1.45}
 
-aside{flex:none;width:92px;display:flex;flex-direction:column;justify-content:center;gap:10px;
-  background:var(--chip);border:1px solid var(--line);border-radius:20px;padding:10px;box-shadow:var(--shadow);overflow-y:auto}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;justify-items:center}
-.sw{width:30px;height:30px;border-radius:50%;border:none;cursor:pointer;padding:0;position:relative;box-shadow:inset 0 0 0 1px rgba(0,0,0,.15)}
+.empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+  text-align:center;color:#7A6E88;pointer-events:none;padding:24px;transition:opacity .4s}
+.empty b{font-family:"Caveat",cursive;font-size:2.4rem;color:#2C2238;font-weight:600}
+.empty span{font-size:.95rem;max-width:34ch;line-height:1.45}
+
+#fx{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:8}
+.fly{position:absolute;bottom:-40px;line-height:1;animation:rise var(--d,2.6s) ease-out forwards}
+.fly.h{color:#E2546B}
+@keyframes rise{0%{transform:translate(0,0) scale(.6);opacity:0}12%{opacity:1}100%{transform:translate(var(--x,0),calc(-1 * var(--h,500px))) scale(1.15) rotate(var(--r,0deg));opacity:0}}
+
+/* Aç-kapa butonu */
+#toggle{position:absolute;top:10px;right:10px;z-index:7;width:48px;height:48px;border-radius:50%;border:none;cursor:pointer;
+  background:var(--chip);color:var(--ink);box-shadow:var(--shadow);display:grid;place-items:center;padding:0;
+  margin-top:env(safe-area-inset-top,0px);margin-right:env(safe-area-inset-right,0px)}
+#toggle svg{width:24px;height:24px}
+#toggle .cdot{position:absolute;right:2px;bottom:2px;width:16px;height:16px;border-radius:50%;border:2.5px solid var(--chip)}
+#toggle .ico-x{display:none}
+#trash{position:absolute;top:10px;right:68px;z-index:7;height:48px;min-width:48px;border-radius:999px;border:none;cursor:pointer;
+  background:var(--chip);color:var(--ink);box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;gap:6px;padding:0 13px;
+  font:inherit;font-weight:800;font-size:.85rem;margin-top:env(safe-area-inset-top,0px);margin-right:env(safe-area-inset-right,0px);transition:background .2s,color .2s}
+#trash svg{width:21px;height:21px;flex:none}
+#trash span{display:none;white-space:nowrap}
+#trash.ask{background:#E2546B;color:#fff}
+#trash.ask span{display:inline}
+#app.open #trash{display:none}
+#app.open #toggle .ico-x{display:block}
+#app.open #toggle .ico-p,#app.open #toggle .cdot{display:none}
+
+/* Panel */
+#panel{position:absolute;top:8px;right:8px;bottom:8px;width:min(214px,72%);z-index:6;background:var(--chip);border-radius:22px;
+  box-shadow:var(--shadow);padding:66px 12px 14px;overflow-y:auto;overscroll-behavior:contain;
+  transform:translateX(calc(100% + 24px));transition:transform .28s cubic-bezier(.2,.8,.2,1);
+  margin-top:env(safe-area-inset-top,0px);margin-right:env(safe-area-inset-right,0px);margin-bottom:env(safe-area-inset-bottom,0px)}
+#app.open #panel{transform:none}
+#panel h2{font-family:"Caveat",cursive;font-size:1.55rem;margin:4px 0 8px 2px;line-height:1}
+.sec{margin-top:12px}
+.sec > label,.sec > .t{display:block;font-size:.72rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--soft);margin:0 0 7px 2px}
+.tools{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
+.tool{border:1.5px solid var(--line);background:transparent;color:var(--ink);border-radius:12px;padding:7px 8px;cursor:pointer;
+  display:flex;align-items:center;gap:6px;font:inherit;font-size:.78rem;font-weight:800}
+.tool svg{width:20px;height:20px;flex:none}
+.tool[aria-pressed="true"]{border-color:var(--rose);background:color-mix(in srgb,var(--rose) 12%,transparent);color:var(--rose)}
+.fill{margin-top:6px;width:100%;border:1.5px solid var(--line);background:transparent;color:var(--ink);border-radius:12px;padding:8px 10px;
+  font:inherit;font-size:.76rem;font-weight:800;display:flex;align-items:center;justify-content:space-between;cursor:pointer}
+.fill .sw2{width:36px;height:20px;border-radius:999px;background:var(--line);position:relative;transition:background .2s}
+.fill .sw2::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.fill[aria-pressed="true"] .sw2{background:var(--rose)}
+.fill[aria-pressed="true"] .sw2::after{transform:translateX(16px)}
+.sizerow{display:flex;align-items:center;gap:10px}
+.sizerow input{flex:1;min-width:0;accent-color:var(--rose)}
+.sizeprev{flex:none;width:38px;height:38px;border-radius:12px;background:var(--chip2);display:grid;place-items:center}
+.sizeprev i{display:block;border-radius:50%}
+.colors{display:grid;grid-template-columns:repeat(5,1fr);gap:9px 6px;justify-items:center}
+.sw{width:28px;height:28px;border-radius:50%;border:none;cursor:pointer;padding:0;position:relative;box-shadow:inset 0 0 0 1px rgba(0,0,0,.15)}
 .sw[aria-pressed="true"]::after{content:"";position:absolute;inset:-5px;border-radius:50%;border:2.5px solid var(--ink)}
-.rule{height:1px;background:var(--line)}
-.btn{width:34px;height:34px;border-radius:11px;border:1px solid var(--line);background:transparent;color:var(--ink);
-  display:grid;place-items:center;cursor:pointer;padding:0}
-.btn svg{width:18px;height:18px}
-.btn:active{background:var(--line)}
-.size i{display:block;border-radius:50%;background:var(--ink)}
+.custom{background:conic-gradient(#f43,#fb3,#8d3,#3cd,#36f,#a3f,#f3a,#f43);overflow:hidden}
+.custom input{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer}
+.emojis{display:grid;grid-template-columns:repeat(4,1fr);gap:5px}
+.emo{border:none;background:var(--chip2);border-radius:12px;font-size:1.35rem;height:40px;cursor:pointer;padding:0;line-height:1}
+.emo:active{transform:scale(.9)}
+.actions{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
+.act{border:1.5px solid var(--line);background:transparent;color:var(--ink);border-radius:13px;padding:8px 2px 7px;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;gap:3px;font:inherit;font-size:.72rem;font-weight:800}
+.act svg{width:20px;height:20px}
+.act:active,.tool:active{background:var(--line)}
 button:focus-visible{outline:2.5px solid var(--rose);outline-offset:2px}
 
-.toast{position:absolute;left:50%;bottom:22px;transform:translateX(-50%) translateY(16px);background:var(--ink);color:var(--paper);
-  font-weight:800;font-size:.9rem;padding:9px 15px;border-radius:14px;opacity:0;transition:opacity .3s,transform .3s;pointer-events:none;white-space:nowrap;z-index:3}
+.toast{position:absolute;left:50%;bottom:18px;transform:translateX(-50%) translateY(16px);background:#2C2238;color:#FFFDFB;
+  font-weight:800;font-size:.9rem;padding:9px 15px;border-radius:14px;opacity:0;transition:opacity .3s,transform .3s;pointer-events:none;white-space:nowrap;z-index:9}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
-#start{position:absolute;inset:0;z-index:10;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:20px;overflow:hidden;transition:opacity .6s}
+/* Giriş ekranı */
+#start{position:absolute;inset:0;z-index:20;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:20px;overflow:hidden;transition:opacity .6s}
 #start.bye{opacity:0;pointer-events:none}
 #start .hi{font-family:"Caveat",cursive;font-size:1.6rem;color:var(--rose);margin:0}
 #start h1{font-family:"Caveat",cursive;font-weight:700;font-size:clamp(2.2rem,7vmin,3.4rem);line-height:1;margin:0;max-width:20ch}
 #start p{margin:0;color:var(--soft);max-width:38ch;line-height:1.5}
 #start .sign{font-family:"Caveat",cursive;font-size:1.6rem;color:var(--ink);opacity:.8}
-#go{font:inherit;font-weight:800;font-size:1.1rem;border:none;border-radius:999px;padding:14px 32px;background:var(--rose);color:#fff;cursor:pointer;box-shadow:var(--shadow);margin-top:6px;position:relative;z-index:1}
+#go{font:inherit;font-weight:800;font-size:1.1rem;border:none;border-radius:999px;padding:14px 32px;background:var(--rose);color:#fff;cursor:pointer;box-shadow:var(--shadow);margin-top:6px}
 .float{position:absolute;bottom:-40px;color:var(--rose);opacity:.18;animation:drift linear infinite;pointer-events:none}
 @keyframes drift{from{transform:translateY(0) rotate(-10deg)}to{transform:translateY(calc(-1 * var(--ah,100vh) - 80px)) rotate(14deg)}}
 #start > *:not(.float){position:relative;z-index:1}
+@media (prefers-reduced-motion: reduce){.fly{animation-duration:.01s}.status.together .dot,.float{animation:none !important}#panel{transition:none}}
 </style>
 </head>
 <body>
@@ -94,85 +142,194 @@ button:focus-visible{outline:2.5px solid var(--rose);outline-offset:2px}
   <main id="main">
     <div class="sheet" id="sheet">
       <canvas id="cv"></canvas>
+      <canvas id="pv"></canvas>
       <div class="status" id="status"><span class="dot"></span><span id="statusText">Sana bağlanıyorum…</span></div>
       <div class="empty" id="empty"><b>Seninle birşeyler çizmek istedim</b><span>Bu aralar canın sıkkın biliyorum bebeğim, herşey az da olsa gülümsemen için</span></div>
-      <div class="toast" id="toast"></div>
     </div>
   </main>
-  <aside>
-    <div class="grid" id="swatches" role="group" aria-label="Renk"></div>
-    <div class="rule"></div>
-    <div class="grid">
-      <button class="btn size" id="sizeBtn" aria-label="Kalınlık"><i id="sizeDot"></i></button>
-      <button class="btn" id="undoBtn" aria-label="Son çizgimi geri al"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
-      <button class="btn" id="clearBtn" aria-label="Sayfayı temizle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
-      <button class="btn" id="loveBtn" aria-label="Kalp gönder" style="color:var(--rose)"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 21s-7.5-4.6-9.5-9.2C1 8.4 3.2 5 6.6 5c2 0 3.7 1.1 4.4 2.7h2C13.7 6.1 15.4 5 17.4 5 20.8 5 23 8.4 21.5 11.8 19.5 16.4 12 21 12 21z"/></svg></button>
-      <button class="btn" id="fsBtn" aria-label="Tam ekran"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5"/><path d="M20 9V4h-5"/><path d="M4 15v5h5"/><path d="M20 15v5h-5"/></svg></button>
+
+  <button id="trash" aria-label="Sayfayı temizle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg><span>Silinsin mi?</span></button>
+  <button id="toggle" aria-label="Paneli aç/kapat" aria-expanded="false">
+    <svg class="ico-p" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.8-.8 1.8-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-.9.8-1.7 1.8-1.7H17a4 4 0 0 0 4-4c0-4.5-4-8.2-9-8.2z"/><circle cx="7.5" cy="11" r="1.2" fill="currentColor"/><circle cx="10.5" cy="7" r="1.2" fill="currentColor"/><circle cx="15" cy="7.5" r="1.2" fill="currentColor"/></svg>
+    <svg class="ico-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+    <span class="cdot" id="cdot"></span>
+  </button>
+
+  <aside id="panel" aria-label="Araçlar">
+    <h2>Çizim kutumuz</h2>
+
+    <div class="sec">
+      <span class="t">Araçlar</span>
+      <div class="tools" id="tools"></div>
+      <button class="fill" id="fillBtn" aria-pressed="false">Şekillerin içi dolu <span class="sw2"></span></button>
+    </div>
+
+    <div class="sec">
+      <label for="size">Kalınlık</label>
+      <div class="sizerow">
+        <input type="range" id="size" min="2" max="70" value="12">
+        <div class="sizeprev"><i id="sizeDot"></i></div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <span class="t">Renkler</span>
+      <div class="colors" id="colors"></div>
+    </div>
+
+    <div class="sec">
+      <span class="t">Duygunu gönder</span>
+      <div class="emojis" id="emojis"></div>
+    </div>
+
+    <div class="sec">
+      <span class="t">Sayfa</span>
+      <div class="actions">
+        <button class="act" id="undoBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>Geri al</button>
+        <button class="act" id="fsBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5"/><path d="M20 9V4h-5"/><path d="M4 15v5h5"/><path d="M20 15v5h-5"/></svg>Tam ekran</button>
+      </div>
     </div>
   </aside>
+
+  <div id="fx"></div>
+  <div class="toast" id="toast"></div>
+
   <div id="start">
-    <p class="hi" id="hi">Bizim için sevgili bucimmmm</p>
+    <p class="hi">Bizim için sevgili bucimmmm</p>
     <h1>Uzaktayız ama uzak olmak zorunda değiliz Sevgilim</h1>
     <p>Hadi birtanem gel birşeyler çizelim, çocukça davranmak için çocuk olmaya gerek yok</p>
     <button id="go">Başlayalım aşkım 💌</button>
-    <div class="sign" id="sign"></div>
+    <div class="sign">Seni çok seviyorum Zeynebimmmm ♥</div>
   </div>
 </div>
 
 <script>
+// Bir hata olursa sol üstte göster (sorunu bulmak için)
+window.addEventListener("error", e => {
+  const el = document.getElementById("statusText");
+  if (el) el.textContent = "Hata: " + (e.message || "bilinmiyor").slice(0, 60);
+});
 (() => {
-  // ====== Kişisel dokunuşlar (istersen doldur) ======
-  const ONUN_ADI = "Zeynep";
-  const IMZA = "Mehmet"; 
-
   // ====== Ayarlar ======
-  // Aynı odadaki herkes birbirini görür. Linke ?oda=baskaisim ekleyerek farklı oda açılabilir.
+  // Linke ?oda=baskaisim ekleyerek farklı oda açılabilir.
   const ROOM = new URLSearchParams(location.search).get("oda") || "ask-8205c547abb0";
-  const BROKER = "wss://broker.hivemq.com:8884/mqtt";
-  const TOPIC = "birliktecizim/v1/" + ROOM.replace(/[^a-zA-Z0-9_-]/g, "");
+  const TOPIC = "birliktecizim/v2/" + ROOM.replace(/[^a-zA-Z0-9_-]/g, "");
+  // Birden fazla ücretsiz sunucuya aynı anda bağlanıyoruz; biri çalışmazsa diğeri taşır.
+  const BROKERS = [
+    "wss://broker.emqx.io:8084/mqtt",
+    "wss://broker.hivemq.com:8884/mqtt",
+    "wss://test.mosquitto.org:8081/mqtt"
+  ];
+  const MQTT_URLS = [
+    "https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js",
+    "https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js",
+    "https://cdn.jsdelivr.net/npm/mqtt@4.3.7/dist/mqtt.min.js"
+  ];
 
-  // Mantıksal yatay sayfa: her telefonda aynı, çizimler birebir aynı yere düşer.
-  const W = 1400, H = 1000;
-  const COLORS = ["#2C2238","#E2546B","#F08A5D","#E8B23B","#4C9A6A","#3E7CB1","#8A5CC7","#FFFFFF"];
-  const SIZES = [5, 10, 20];
+  // Mantıksal sayfa (telefon ekranı oranında, ~20:9). Her telefonda birebir aynı yere düşer.
+  const W = 2000, H = 920;
+  const COLORS = ["#2C2238","#FFFFFF","#9A93A3","#7B4A2E","#E2546B","#FF8FAB",
+                  "#B5174B","#F08A5D","#E8B23B","#FFE45C","#8BD17C","#4C9A6A",
+                  "#1F6F5C","#6EC3F4","#3E7CB1","#1B3A8C","#C9A3F2","#8A5CC7"];
+  const EMOJIS = ["❤️","😂","😢","😍","😘","🥺","😡","😮","🤗","😴","🎉","🌹"];
+  const ICON = {
+    pen:  '<path d="M4 20l4-1 11-11-3-3L5 16l-1 4z"/><path d="M14 6l3 3"/>',
+    erase:'<path d="M8 20h12"/><path d="M5.5 15.5 14 7l5 5-7.5 7.5H9z"/><path d="M10 11l5 5"/>',
+    line: '<path d="M5 19 19 5"/>',
+    rect: '<rect x="4.5" y="6" width="15" height="12" rx="1.5"/>',
+    ell:  '<circle cx="12" cy="12" r="7.5"/>',
+    heart:'<path d="M12 20s-7-4.3-8.8-8.6C2 8.3 4 5.2 7.1 5.2c1.9 0 3.4 1 4.1 2.5h1.6c.7-1.5 2.2-2.5 4.1-2.5 3.1 0 5.1 3.1 3.9 6.2C19 15.7 12 20 12 20z"/>'
+  };
+  const TOOLS = [["pen","Kalem"],["erase","Silgi"],["line","Çizgi"],["rect","Kare"],["ell","Daire"],["heart","Kalp"]];
+  const SHAPES = ["line","rect","ell","heart"];
   const ME = Math.random().toString(36).slice(2, 10);
 
   const $ = id => document.getElementById(id);
-  const sheet = $("sheet"), cv = $("cv"), ctx = cv.getContext("2d"), main = $("main");
-  const emptyEl = $("empty"), statusEl = $("status"), statusText = $("statusText"), toastEl = $("toast");
+  const app = $("app"), sheet = $("sheet"), main = $("main");
+  const cv = $("cv"), ctx = cv.getContext("2d");
+  const pv = $("pv"), pctx = pv.getContext("2d");
+  const emptyEl = $("empty"), statusEl = $("status"), statusText = $("statusText"), toastEl = $("toast"), fx = $("fx");
 
-  let color = COLORS[1], sizeIdx = 1, scale = 1, rotated = false;
+  let tool = "pen", color = "#E2546B", size = 12, fillOn = false;
+  let scale = 1, view = 1, offX = 0, offY = 0, rotated = false, online = false;
   const strokes = new Map(), order = [], mine = [];
-  let client = null, online = false;
+  const live = new Map(); // yapılmakta olan şekiller (benim ve onun)
 
-  // ====== Araç çubuğu ======
-  const sw = $("swatches");
+  // ====== Panel ======
+  function setPanel(open){
+    app.classList.toggle("open", open);
+    $("toggle").setAttribute("aria-expanded", open);
+  }
+  $("toggle").onclick = () => setPanel(!app.classList.contains("open"));
+
+  const toolsEl = $("tools");
+  TOOLS.forEach(([k, label]) => {
+    const b = document.createElement("button");
+    b.className = "tool"; b.dataset.k = k;
+    b.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + ICON[k] + '</svg>' + label;
+    b.setAttribute("aria-pressed", k === tool);
+    b.onclick = () => { tool = k; [...toolsEl.children].forEach(x => x.setAttribute("aria-pressed", x === b)); refreshUI(); };
+    toolsEl.appendChild(b);
+  });
+  $("fillBtn").onclick = () => { fillOn = !fillOn; $("fillBtn").setAttribute("aria-pressed", fillOn); };
+
+  const colorsEl = $("colors");
+  function markColor(){
+    [...colorsEl.children].forEach(x => x.setAttribute("aria-pressed", x.dataset.c === color || (x.classList.contains("custom") && !COLORS.includes(color))));
+  }
   COLORS.forEach(c => {
     const b = document.createElement("button");
-    b.className = "sw"; b.style.background = c; b.setAttribute("aria-label", "Renk");
-    b.setAttribute("aria-pressed", c === color);
-    b.onclick = () => { color = c; [...sw.children].forEach(x => x.setAttribute("aria-pressed", x === b)); };
-    sw.appendChild(b);
+    b.className = "sw"; b.style.background = c; b.dataset.c = c; b.setAttribute("aria-label", "Renk");
+    b.onclick = () => { color = c; if (tool === "erase") selectTool("pen"); refreshUI(); };
+    colorsEl.appendChild(b);
   });
-  const sizeDot = $("sizeDot");
-  const syncSizeDot = () => { const d = [6,11,18][sizeIdx]; sizeDot.style.width = sizeDot.style.height = d + "px"; };
-  syncSizeDot();
-  $("sizeBtn").onclick = () => { sizeIdx = (sizeIdx + 1) % SIZES.length; syncSizeDot(); };
+  const custom = document.createElement("label");
+  custom.className = "sw custom"; custom.setAttribute("aria-label", "Kendi rengini seç");
+  custom.innerHTML = '<input type="color" value="#E2546B">';
+  custom.querySelector("input").addEventListener("input", e => { color = e.target.value.toUpperCase(); if (tool === "erase") selectTool("pen"); refreshUI(); });
+  colorsEl.appendChild(custom);
+  function selectTool(k){ tool = k; [...toolsEl.children].forEach(x => x.setAttribute("aria-pressed", x.dataset.k === k)); }
 
-  function hearts(n){
-    const H_ = sheet.clientHeight;
+  $("size").addEventListener("input", e => { size = +e.target.value; refreshUI(); });
+  function refreshUI(){
+    markColor();
+    const d = Math.max(3, Math.min(34, size * 0.55));
+    const dot = $("sizeDot");
+    dot.style.width = dot.style.height = d + "px";
+    dot.style.background = tool === "erase" ? "transparent" : color;
+    dot.style.border = tool === "erase" ? "2px dashed var(--soft)" : (color === "#FFFFFF" ? "1px solid var(--line)" : "none");
+    $("cdot").style.background = tool === "erase" ? "var(--chip2)" : color;
+  }
+  refreshUI();
+
+  const emojisEl = $("emojis");
+  let lastEmo = 0;
+  EMOJIS.forEach(e => {
+    const b = document.createElement("button");
+    b.className = "emo"; b.textContent = e; b.setAttribute("aria-label", "Gönder " + e);
+    b.onclick = () => {
+      const now = Date.now(); if (now - lastEmo < 600) return; lastEmo = now;
+      fly(e, 9); send({t: "emo", e});
+      if (!othersCount()) toast("Henüz burada değil, gelince tekrar gönder 💗");
+    };
+    emojisEl.appendChild(b);
+  });
+
+  // ====== Efektler ======
+  function fly(ch, n){
+    const HH = fx.clientHeight;
     for (let i = 0; i < n; i++){
       const h = document.createElement("span");
-      h.className = "heart"; h.textContent = "♥";
-      h.style.left = (8 + Math.random() * 84) + "%";
-      h.style.fontSize = (18 + Math.random() * 26) + "px";
-      h.style.setProperty("--x", (Math.random() * 80 - 40) + "px");
-      h.style.setProperty("--h", (H_ * (0.6 + Math.random() * 0.45)) + "px");
+      h.className = "fly" + (ch === "♥" ? " h" : ""); h.textContent = ch;
+      h.style.left = (6 + Math.random() * 88) + "%";
+      h.style.fontSize = (22 + Math.random() * 28) + "px";
+      h.style.setProperty("--x", (Math.random() * 90 - 45) + "px");
+      h.style.setProperty("--h", (HH * (0.6 + Math.random() * 0.45)) + "px");
       h.style.setProperty("--r", (Math.random() * 40 - 20) + "deg");
       h.style.setProperty("--d", (2.2 + Math.random() * 1.6) + "s");
       h.style.animationDelay = (Math.random() * 0.6) + "s";
       h.addEventListener("animationend", () => h.remove());
-      sheet.appendChild(h);
+      fx.appendChild(h);
     }
   }
   function toast(msg){
@@ -180,16 +337,7 @@ button:focus-visible{outline:2.5px solid var(--rose);outline-offset:2px}
     clearTimeout(toast.t); toast.t = setTimeout(() => toastEl.classList.remove("show"), 2400);
   }
 
-  // ====== Yatay ekran ======
-  async function goLandscape(){
-    try {
-      const el = document.documentElement;
-      if (!document.fullscreenElement && el.requestFullscreen) await el.requestFullscreen({navigationUI: "hide"});
-      if (screen.orientation && screen.orientation.lock) await screen.orientation.lock("landscape");
-    } catch (e) { /* iPhone vb. desteklemiyor: döndürme CSS ile yapılıyor */ }
-    setTimeout(layout, 300);
-  }
-  $("sign").textContent = "Seni çok seviyorum Zeynebimmmm ♥";
+  // ====== Giriş ekranı ======
   (() => {
     const st = $("start");
     for (let i = 0; i < 12; i++){
@@ -202,13 +350,22 @@ button:focus-visible{outline:2.5px solid var(--rose);outline-offset:2px}
       st.appendChild(h);
     }
   })();
+  async function goLandscape(){
+    try {
+      const el = document.documentElement;
+      if (!document.fullscreenElement && el.requestFullscreen) await el.requestFullscreen({navigationUI: "hide"});
+      if (screen.orientation && screen.orientation.lock) await screen.orientation.lock("landscape");
+    } catch (e) { /* iPhone vb. desteklemiyor: döndürme CSS ile yapılıyor */ }
+    setTimeout(layout, 300);
+  }
   $("go").onclick = () => {
     const st = $("start"); st.classList.add("bye"); setTimeout(() => st.remove(), 650);
     goLandscape();
-    setTimeout(() => hearts(10), 500);
+    setTimeout(() => fly("♥", 10), 500);
   };
-  $("fsBtn").onclick = goLandscape;
+  $("fsBtn").onclick = () => { setPanel(false); goLandscape(); };
 
+  // ====== Yerleşim ======
   function layout(){
     const vw = window.innerWidth, vh = window.innerHeight;
     rotated = vh > vw;
@@ -218,78 +375,128 @@ button:focus-visible{outline:2.5px solid var(--rose);outline-offset:2px}
     root.setProperty("--aw", (rotated ? vh : vw) + "px");
     root.setProperty("--ah", (rotated ? vw : vh) + "px");
 
-    const availW = main.clientWidth, availH = main.clientHeight;
-    let w = availW, h = w * H / W;
-    if (h > availH){ h = availH; w = h * W / H; }
-    sheet.style.width = w + "px"; sheet.style.height = h + "px";
+    // Tuval tüm ekranı kaplar. Ortak alan ortalanır, kenarlarda kalan yerlere de çizilebilir.
+    const w = sheet.clientWidth, h = sheet.clientHeight;
     const dpr = Math.min(window.devicePixelRatio || 1, 3);
-    cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
-    scale = cv.width / W;
-    redraw();
+    for (const c of [cv, pv]){ c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
+    view = Math.min(w / W, h / H);
+    offX = (w - W * view) / 2; offY = (h - H * view) / 2;
+    scale = view * dpr;
+    for (const p of peers.values()) placePen(p);
+    redraw(); redrawLive();
   }
   window.addEventListener("resize", () => requestAnimationFrame(layout));
+  // Sayfa boyutu sonradan değişirse (ör. tarayıcı çubuğu gizlenince) tuvali yeniden ayarla
+  if (window.ResizeObserver) new ResizeObserver(() => requestAnimationFrame(layout)).observe(main);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) layout(); });
   window.addEventListener("orientationchange", () => setTimeout(layout, 250));
 
   // ====== Çizim ======
-  function strokeSeg(s, from){
-    const p = s.p; if (p.length < 2) return;
-    ctx.save(); ctx.setTransform(scale,0,0,scale,0,0);
-    ctx.lineCap = "round"; ctx.lineJoin = "round";
-    ctx.strokeStyle = s.c; ctx.fillStyle = s.c; ctx.lineWidth = s.w;
-    if (p.length === 2){ ctx.beginPath(); ctx.arc(p[0], p[1], s.w/2, 0, Math.PI*2); ctx.fill(); }
-    else {
-      const st = Math.max(0, from - 2);
-      ctx.beginPath(); ctx.moveTo(p[st], p[st+1]);
-      for (let i = st + 2; i < p.length; i += 2) ctx.lineTo(p[i], p[i+1]);
-      ctx.stroke();
+  function heartPath(c, x, y, w, h){
+    c.moveTo(x + w/2, y + h*0.28);
+    c.bezierCurveTo(x + w/2, y, x, y, x, y + h*0.3);
+    c.bezierCurveTo(x, y + h*0.62, x + w/2, y + h*0.8, x + w/2, y + h);
+    c.bezierCurveTo(x + w/2, y + h*0.8, x + w, y + h*0.62, x + w, y + h*0.3);
+    c.bezierCurveTo(x + w, y, x + w/2, y, x + w/2, y + h*0.28);
+    c.closePath();
+  }
+  function drawStroke(c, s, from){
+    const p = s.p; if (!p || p.length < 2) return;
+    c.save(); c.setTransform(scale, 0, 0, scale, offX * scale / view, offY * scale / view);
+    c.lineCap = "round"; c.lineJoin = "round"; c.lineWidth = s.w;
+    if (s.k === "erase"){ c.globalCompositeOperation = "destination-out"; c.strokeStyle = c.fillStyle = "#000"; }
+    else { c.strokeStyle = c.fillStyle = s.c; }
+    if (s.k === "pen" || s.k === "erase"){
+      if (p.length === 2){ c.beginPath(); c.arc(p[0], p[1], s.w/2, 0, Math.PI*2); c.fill(); }
+      else {
+        const st = Math.max(0, (from || 0) - 2);
+        c.beginPath(); c.moveTo(p[st], p[st+1]);
+        for (let i = st + 2; i < p.length; i += 2) c.lineTo(p[i], p[i+1]);
+        c.stroke();
+      }
+    } else if (p.length >= 4){
+      const [x1, y1, x2, y2] = p;
+      c.beginPath();
+      if (s.k === "line"){ c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke(); }
+      else {
+        const x = Math.min(x1, x2), y = Math.min(y1, y2), w = Math.abs(x2 - x1), h = Math.abs(y2 - y1);
+        if (s.k === "rect") c.rect(x, y, w, h);
+        else if (s.k === "ell") c.ellipse(x + w/2, y + h/2, w/2, h/2, 0, 0, Math.PI*2);
+        else heartPath(c, x, y, w, h);
+        s.f ? c.fill() : c.stroke();
+      }
     }
-    ctx.restore();
+    c.restore();
   }
   function redraw(){
-    ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,cv.width,cv.height);
-    for (const id of order){ const s = strokes.get(id); if (s) strokeSeg(s, 0); }
-    emptyEl.style.opacity = order.length ? "0" : "1";
+    ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0, 0, cv.width, cv.height);
+    for (const id of order){ const s = strokes.get(id); if (s) drawStroke(ctx, s, 0); }
+    emptyEl.style.opacity = order.length || live.size ? "0" : "1";
+  }
+  function redrawLive(){
+    pctx.setTransform(1,0,0,1,0,0); pctx.clearRect(0, 0, pv.width, pv.height);
+    for (const s of live.values()) drawStroke(pctx, s, 0);
   }
   let rq = false;
   const queueRedraw = () => { if (rq) return; rq = true; requestAnimationFrame(() => { rq = false; redraw(); }); };
+  let lq = false;
+  const queueLive = () => { if (lq) return; lq = true; requestAnimationFrame(() => { lq = false; redrawLive(); }); };
 
-  function applyPts(id, c, w, o, pts, inc){
+  function addStroke(id, s){
+    if (!strokes.has(id)) order.push(id);
+    strokes.set(id, s);
+    emptyEl.style.opacity = "0";
+  }
+  function applyPts(id, k, c, w, o, pts, inc){
     let s = strokes.get(id);
-    if (!s){ s = {c, w, p: []}; strokes.set(id, s); order.push(id); }
+    if (!s){ s = {k, c, w, p: []}; addStroke(id, s); }
     for (let i = 0; i < pts.length; i++) s.p[o + i] = pts[i];
     emptyEl.style.opacity = "0";
-    inc ? strokeSeg(s, o) : queueRedraw();
+    inc ? drawStroke(ctx, s, o) : queueRedraw();
+  }
+  function commitShape(id, s){
+    live.delete(id);
+    const existed = strokes.has(id);
+    addStroke(id, s);
+    existed ? queueRedraw() : drawStroke(ctx, s, 0);
+    queueLive();
   }
   function removeStroke(id){
+    live.delete(id); queueLive();
     if (!strokes.delete(id)) return;
     const i = order.indexOf(id); if (i >= 0) order.splice(i, 1);
     const j = mine.indexOf(id); if (j >= 0) mine.splice(j, 1);
     queueRedraw();
   }
-  function clearAll(){ strokes.clear(); order.length = 0; mine.length = 0; queueRedraw(); }
+  function clearAll(){ strokes.clear(); order.length = 0; mine.length = 0; live.clear(); queueRedraw(); queueLive(); }
 
-  // ====== Bağlantı ======
+  // ====== Bağlantı (gönderme) ======
+  const conns = [];
+  const seenMsg = new Set(), seenQ = [];
+  const mid = () => Math.random().toString(36).slice(2, 11);
   function send(obj){
-    if (!client || !online) return;
-    obj.f = ME;
-    client.publish(TOPIC, JSON.stringify(obj), {qos: 0});
+    if (!online) return;
+    obj.f = ME; obj.m = mid();
+    const raw = JSON.stringify(obj);
+    for (const c of conns) if (c.connected) { try { c.publish(TOPIC, raw, {qos: 0}); } catch (e) {} }
   }
+  function updOnline(){ online = conns.some(c => c.connected); setStatus(); }
 
   // ====== Dokunma ======
-  let cur = null, pending = [], pendingFrom = 0, flushTimer = null, lastPen = 0;
+  let cur = null, pending = [], pendingFrom = 0, flushTimer = null, lastPen = 0, lastShp = 0, shpTimer = null;
   function toLogical(e){
     const r = cv.getBoundingClientRect();
-    let fx, fy;
-    if (rotated){ fx = (e.clientY - r.top) / r.height; fy = (r.right - e.clientX) / r.width; }
-    else { fx = (e.clientX - r.left) / r.width; fy = (e.clientY - r.top) / r.height; }
-    return [Math.round(fx * W), Math.round(fy * H)];
+    let px, py; // tuval içindeki konum (CSS piksel)
+    if (rotated){ px = (e.clientY - r.top) / r.height * cv.clientWidth; py = (r.right - e.clientX) / r.width * cv.clientHeight; }
+    else { px = (e.clientX - r.left) / r.width * cv.clientWidth; py = (e.clientY - r.top) / r.height * cv.clientHeight; }
+    return [Math.round((px - offX) / view), Math.round((py - offY) / view)];
   }
   const newId = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 
   function flush(){
     flushTimer = null;
     if (!cur || !pending.length){ pending = []; return; }
-    send({t: "seg", id: cur.id, c: cur.c, w: cur.w, o: pendingFrom, p: pending});
+    send({t: "seg", id: cur.id, k: cur.k, c: cur.c, w: cur.w, o: pendingFrom, p: pending});
     pending = [];
   }
   function queuePts(o, pts){
@@ -298,31 +505,56 @@ button:focus-visible{outline:2.5px solid var(--rose);outline-offset:2px}
     if (pending.length > 300) flush();
     else if (!flushTimer) flushTimer = setTimeout(flush, 40);
   }
+  function sendShape(done){
+    clearTimeout(shpTimer); shpTimer = null;
+    if (!cur) return;
+    lastShp = Date.now();
+    send({t: "shp", id: cur.id, k: cur.k, c: cur.c, w: cur.w, f: cur.f, p: cur.p.slice(0, 4), d: !!done});
+  }
   function pen(x, y, d){
     const now = Date.now();
     if (d && now - lastPen < 50) return;
     lastPen = now;
-    send({t: "pen", x, y, d, c: cur ? cur.c : color});
+    send({t: "pen", x, y, d, c: cur && cur.k !== "erase" ? cur.c : color});
   }
 
   cv.addEventListener("pointerdown", e => {
     e.preventDefault();
+    if (app.classList.contains("open")){ setPanel(false); return; }
+    if (cur) return;
+    if (!view || !cv.width || cv.clientWidth !== Math.round(cv.width / Math.min(window.devicePixelRatio || 1, 3))) layout();
+    if (!view) return;
     cv.setPointerCapture(e.pointerId);
     const pt = toLogical(e);
-    cur = {id: newId(), c: color, w: SIZES[sizeIdx]};
-    mine.push(cur.id);
-    applyPts(cur.id, cur.c, cur.w, 0, pt, true);
-    queuePts(0, pt);
+    if (SHAPES.includes(tool)){
+      cur = {id: newId(), k: tool, c: color, w: size, f: fillOn && tool !== "line", p: [pt[0], pt[1], pt[0], pt[1]], shape: true};
+      live.set(cur.id, cur); queueLive();
+      emptyEl.style.opacity = "0";
+    } else {
+      cur = {id: newId(), k: tool, c: color, w: tool === "erase" ? Math.max(size, 14) * 1.6 : size};
+      mine.push(cur.id);
+      applyPts(cur.id, cur.k, cur.c, cur.w, 0, pt, true);
+      queuePts(0, pt);
+    }
     pen(pt[0], pt[1], true);
   });
   cv.addEventListener("pointermove", e => {
     if (!cur) return;
+    if (cur.shape){
+      const pt = toLogical(e);
+      cur.p[2] = pt[0]; cur.p[3] = pt[1];
+      queueLive();
+      if (Date.now() - lastShp > 45) sendShape(false);
+      else if (!shpTimer) shpTimer = setTimeout(() => sendShape(false), 45);
+      pen(pt[0], pt[1], true);
+      return;
+    }
     const s = strokes.get(cur.id); if (!s) return;
     const evs = (e.getCoalescedEvents && e.getCoalescedEvents().length) ? e.getCoalescedEvents() : [e];
     for (const ev of evs){
       const pt = toLogical(ev), n = s.p.length;
       if (Math.abs(s.p[n-2] - pt[0]) + Math.abs(s.p[n-1] - pt[1]) < 3) continue;
-      applyPts(cur.id, cur.c, cur.w, n, pt, true);
+      applyPts(cur.id, cur.k, cur.c, cur.w, n, pt, true);
       queuePts(n, pt);
     }
     const n = s.p.length;
@@ -330,8 +562,23 @@ button:focus-visible{outline:2.5px solid var(--rose);outline-offset:2px}
   });
   function endStroke(){
     if (!cur) return;
-    if (flushTimer) clearTimeout(flushTimer);
-    flush(); cur = null;
+    if (cur.shape){
+      const [x1, y1, x2, y2] = cur.p;
+      if (Math.abs(x2 - x1) < 6 && Math.abs(y2 - y1) < 6){
+        live.delete(cur.id); queueLive();
+        send({t: "shp", id: cur.id, x: true});
+        if (!order.length) emptyEl.style.opacity = "1";
+      } else {
+        sendShape(true);
+        const s = {k: cur.k, c: cur.c, w: cur.w, f: cur.f, p: cur.p.slice(0, 4)};
+        commitShape(cur.id, s);
+        mine.push(cur.id);
+      }
+    } else {
+      if (flushTimer) clearTimeout(flushTimer);
+      flush();
+    }
+    cur = null;
     send({t: "pen", d: false});
   }
   cv.addEventListener("pointerup", endStroke);
@@ -342,36 +589,42 @@ button:focus-visible{outline:2.5px solid var(--rose);outline-offset:2px}
     if (!id){ toast("Henüz bir çizgin yok, hadi çiz ✨"); return; }
     removeStroke(id); send({t: "undo", id});
   };
-  $("clearBtn").onclick = () => {
-    if (!order.length) return;
-    if (!confirm("Bu sayfayı silip ikimize yeni bir sayfa açalım mı?")) return;
+  const trash = $("trash");
+  let askTimer = null;
+  trash.onclick = () => {
+    if (!order.length && !live.size){ toast("Sayfa zaten tertemiz ✨"); return; }
+    if (!trash.classList.contains("ask")){
+      trash.classList.add("ask");
+      clearTimeout(askTimer); askTimer = setTimeout(() => trash.classList.remove("ask"), 3000);
+      return;
+    }
+    clearTimeout(askTimer); trash.classList.remove("ask");
     clearAll(); send({t: "clear"}); toast("Yeni bir sayfa, yeni bir hikâye 🤍");
-  };
-  let lastLove = 0;
-  $("loveBtn").onclick = () => {
-    const now = Date.now(); if (now - lastLove < 900) return; lastLove = now;
-    hearts(8); send({t: "love"});
-    toast(othersCount() ? "Kalbin yola çıktı 💌" : "Henüz burada değil, gelince tekrar gönder 💗");
   };
 
   // ====== Karşı taraf ======
-  const peers = new Map(); // id -> {seen, el}
+  const HEART_SVG = '<svg viewBox="0 0 24 24"><path d="M12 21s-7.5-4.6-9.5-9.2C1 8.4 3.2 5 6.6 5c2 0 3.7 1.1 4.4 2.7h2C13.7 6.1 15.4 5 17.4 5 20.8 5 23 8.4 21.5 11.8 19.5 16.4 12 21 12 21z"/></svg>';
+  const peers = new Map();
+  const othersCount = () => peers.size;
   function peerSeen(id){
     let p = peers.get(id);
-    const wasEmpty = othersCount() === 0;
     if (!p){
-      const el = document.createElement("div"); el.className = "pen";
-      el.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 21s-7.5-4.6-9.5-9.2C1 8.4 3.2 5 6.6 5c2 0 3.7 1.1 4.4 2.7h2C13.7 6.1 15.4 5 17.4 5 20.8 5 23 8.4 21.5 11.8 19.5 16.4 12 21 12 21z"/></svg>';
+      const wasEmpty = othersCount() === 0;
+      const el = document.createElement("div"); el.className = "pen"; el.innerHTML = HEART_SVG;
       sheet.appendChild(el);
       p = {el}; peers.set(id, p);
-      if (wasEmpty){ toast("Geldin 💗 Artık aynı kâğıttayız"); hearts(14); }
+      if (wasEmpty){ toast("Geldin 💗 Artık aynı kâğıttayız"); fly("♥", 14); }
     }
     p.seen = Date.now();
     setStatus();
     return p;
   }
+  function placePen(p){
+    if (p.x == null) return;
+    p.el.style.left = (offX + p.x * view) + "px";
+    p.el.style.top = (offY + p.y * view) + "px";
+  }
   function peerGone(id){ const p = peers.get(id); if (p){ p.el.remove(); peers.delete(id); setStatus(); } }
-  const othersCount = () => peers.size;
   function setStatus(){
     const together = online && othersCount() > 0;
     statusEl.classList.toggle("together", together);
@@ -383,28 +636,52 @@ button:focus-visible{outline:2.5px solid var(--rose);outline-offset:2px}
     for (const [id, p] of peers) if (now - p.seen > 13000) peerGone(id);
   }, 4000);
 
-  const validPts = p => Array.isArray(p) && p.length <= 20000 && p.every(Number.isFinite);
+  const validPts = p => Array.isArray(p) && p.length <= 60000 && p.every(Number.isFinite);
   const safeColor = c => typeof c === "string" && /^#[0-9a-f]{6}$/i.test(c) ? c : "#2C2238";
-  const safeW = w => SIZES.includes(w) ? w : 10;
-  const validSeg = d => typeof d.id === "string" && Number.isInteger(d.o) && d.o >= 0 && d.o % 2 === 0 && validPts(d.p);
+  const safeW = w => Number.isFinite(w) ? Math.max(1, Math.min(140, w)) : 12;
+  const safeId = id => typeof id === "string" ? id.slice(0, 40) : null;
+  const FREE = ["pen", "erase"];
 
   function sendSync(){
     for (const id of order){
       const s = strokes.get(id);
-      if (s) send({t: "sync", id, c: s.c, w: s.w, o: 0, p: s.p});
+      if (s) send({t: "sync", id, k: s.k, c: s.c, w: s.w, f: !!s.f, p: s.p});
     }
   }
 
   function onMsg(raw){
     let d; try { d = JSON.parse(raw); } catch { return; }
     if (!d || typeof d.f !== "string" || d.f === ME) return;
+    if (typeof d.m === "string"){
+      if (seenMsg.has(d.m)) return;            // aynı mesaj başka sunucudan da geldi
+      seenMsg.add(d.m); seenQ.push(d.m);
+      if (seenQ.length > 3000) seenMsg.delete(seenQ.shift());
+    }
     const p = peerSeen(d.f);
+    const id = safeId(d.id);
     switch (d.t){
-      case "seg":  if (validSeg(d)) applyPts(d.id.slice(0,40), safeColor(d.c), safeW(d.w), d.o, d.p, true); break;
-      case "sync": if (validSeg(d)) applyPts(d.id.slice(0,40), safeColor(d.c), safeW(d.w), d.o, d.p, false); break;
-      case "undo": if (typeof d.id === "string") removeStroke(d.id); break;
+      case "seg":
+        if (id && FREE.includes(d.k) && Number.isInteger(d.o) && d.o >= 0 && d.o % 2 === 0 && validPts(d.p))
+          applyPts(id, d.k, safeColor(d.c), safeW(d.w), d.o, d.p, true);
+        break;
+      case "shp":
+        if (!id) break;
+        if (d.x){ live.delete(id); queueLive(); break; }
+        if (SHAPES.includes(d.k) && validPts(d.p) && d.p.length === 4){
+          const s = {k: d.k, c: safeColor(d.c), w: safeW(d.w), f: !!d.f, p: d.p};
+          if (d.d) commitShape(id, s);
+          else if (!strokes.has(id)){ live.set(id, s); queueLive(); emptyEl.style.opacity = "0"; }
+        }
+        break;
+      case "sync":
+        if (id && (FREE.includes(d.k) || SHAPES.includes(d.k)) && validPts(d.p)){
+          addStroke(id, {k: d.k, c: safeColor(d.c), w: safeW(d.w), f: !!d.f, p: d.p});
+          queueRedraw();
+        }
+        break;
+      case "undo": if (id) removeStroke(id); break;
       case "clear": clearAll(); toast("Yeni bir sayfa, yeni bir hikâye 🤍"); break;
-      case "love": hearts(14); toast("Sana bir kalp gönderdi 💗"); break;
+      case "emo": if (EMOJIS.includes(d.e)) fly(d.e, 14); break;
       case "bye": peerGone(d.f); break;
       case "hello": {
         send({t: "here"});
@@ -416,8 +693,7 @@ button:focus-visible{outline:2.5px solid var(--rose);outline-offset:2px}
       }
       case "pen": {
         if (d.d && Number.isFinite(d.x) && Number.isFinite(d.y)){
-          p.el.style.left = (d.x / W * 100) + "%";
-          p.el.style.top = (d.y / H * 100) + "%";
+          p.x = d.x; p.y = d.y; placePen(p);
           p.el.style.color = safeColor(d.c);
           p.el.classList.add("on");
         } else p.el.classList.remove("on");
@@ -426,25 +702,52 @@ button:focus-visible{outline:2.5px solid var(--rose);outline-offset:2px}
     }
   }
 
-  function connect(){
-    if (!window.mqtt){ statusText.textContent = "İnternetini kontrol et"; return; }
-    client = mqtt.connect(BROKER, {
-      clientId: "bc_" + ME, clean: true, reconnectPeriod: 2000, connectTimeout: 10000, keepalive: 30,
-      will: {topic: TOPIC, payload: JSON.stringify({t: "bye", f: ME}), qos: 0, retain: false}
+  function loadMqtt(i = 0){
+    return new Promise((res, rej) => {
+      if (window.mqtt) return res();
+      if (i >= MQTT_URLS.length) return rej();
+      const sc = document.createElement("script");
+      let done = false;
+      const next = () => { if (done) return; done = true; window.mqtt ? res() : loadMqtt(i + 1).then(res, rej); };
+      sc.src = MQTT_URLS[i];
+      sc.onload = next; sc.onerror = next;
+      setTimeout(next, 8000);
+      document.head.appendChild(sc);
     });
-    client.on("connect", () => {
-      client.subscribe(TOPIC, {qos: 0}, () => {
-        online = true; setStatus();
-        send({t: "hello"});
-      });
-    });
-    client.on("message", (_t, msg) => onMsg(msg.toString()));
-    client.on("close", () => { online = false; setStatus(); });
-    client.on("offline", () => { online = false; setStatus(); });
-    window.addEventListener("pagehide", () => { send({t: "bye"}); });
   }
 
-  layout();
+  async function connect(){
+    try { await loadMqtt(); }
+    catch { statusText.textContent = "Bağlanamadım, sayfayı yenile"; return; }
+    BROKERS.forEach((url, i) => {
+      let c;
+      try {
+        c = mqtt.connect(url, {
+          clientId: "bc_" + ME + "_" + i, clean: true, reconnectPeriod: 3000, connectTimeout: 10000, keepalive: 30,
+          will: {topic: TOPIC, payload: JSON.stringify({t: "bye", f: ME, m: "bye_" + ME}), qos: 0, retain: false}
+        });
+      } catch (e) { return; }
+      conns.push(c);
+      c.on("connect", () => {
+        c.subscribe(TOPIC, {qos: 0}, err => {
+          updOnline();
+          if (!err){
+            const raw = JSON.stringify({t: "hello", f: ME, m: mid()});
+            try { c.publish(TOPIC, raw, {qos: 0}); } catch (e) {}
+          }
+        });
+      });
+      c.on("message", (_t, msg) => onMsg(msg.toString()));
+      c.on("close", updOnline);
+      c.on("offline", updOnline);
+      c.on("error", () => {});
+    });
+    setTimeout(() => { if (!online) statusText.textContent = "Bağlanamadım, sayfayı yenile"; }, 15000);
+    window.addEventListener("pagehide", () => send({t: "bye"}));
+  }
+
+  try { layout(); } catch (e) { statusText.textContent = "Hata: " + String(e.message || e).slice(0, 60); }
+  setTimeout(() => { if (!online && statusText.textContent.startsWith("Sana")) statusText.textContent = "Bağlanamadım, sayfayı yenile"; }, 20000);
   connect();
 })();
 </script>
